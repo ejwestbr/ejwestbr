@@ -1,0 +1,720 @@
+---
+title: "IST 707 Group Project: Wine Quality Prediction"
+author: Omar Hanif,  Elizabeth Westbrook
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages
+```{r warning=FALSE, message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+library(RColorBrewer)
+library(randomForest)
+library(party)
+library(ggthemes)
+library(corrplot)
+library(caret)
+library(kernlab)
+library(e1071)
+library(rattle)
+library(rpart)
+library(klaR)
+library(naivebayes)
+library(ISLR)
+library(gbm)
+library(bnclassify)
+theme_set(theme_wsj())
+```
+
+
+# Introduction 
+Wine quality is assessed based on more than just flavor; experts use the range of their senses to do determine the quality of wine. These experts rate a wine's quality on a scale of 1-10. Quality ratings are a popular feature when choosing a wine to purchase.  However, quality ratings can also assist vintners and enologists compare their wines not only to other wines/wineries but also to their own previous vintages.  
+Because wine quality ratings are subjective, enologists would be well-served by having objective measures that can help determine a wine's quality, and with the quality determined, they can take steps to improve the quality.  
+
+
+# Analysis  
+## About the Data  
+In this data set, there are 4,900 observations of 11 physically measurable attributes of wine. This project examines these attributes of white wines in order to determine the predictability of quality with any combination of attributes. The scope is limited to Portuguese white wines and no record of the names of the assessed wines is available. The data set has been obtained from the following link:
+https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/
+
+Variables in the data set
+Input variables:
+1 - fixed acidity (tartaric acid - g / dm^3)
+2 - volatile acidity (acetic acid - g / dm^3)
+3 - citric acid (g / dm^3)
+4 - residual sugar (g / dm^3)
+5 - chlorides (sodium chloride - g / dm^3
+6 - free sulfur dioxide (mg / dm^3)
+7 - total sulfur dioxide (mg / dm^3)
+8 - density (g / cm^3)
+9 - pH
+10 - sulphates (potassium sulphate - g / dm3)
+11 - alcohol (% by volume)
+Output variable (based on sensory data):
+12 - quality (score between 0 and 10)
+
+
+The data set is complete; there are no missing values.  There are no obviously incorrect values; outliers are not too far outside the ranges of each attribute.
+Quality is a discrete variable while all the input variables are continuous; however, Quality requires discretization. Here it is discretized into two bins: "good" and "bad."
+
+
+
+## Load the data
+```{r include=FALSE}
+wine = read.csv("C:/Users/Elizabeth's/Documents/IST_707_W22/group project/winequality-white.csv", sep=";" ,header=T)
+str(wine)
+```
+
+## Explore
+```{r}
+summary(wine)
+```
+
+```{r }
+glimpse(wine)
+```
+
+
+# EDA  
+The histogram plot below displays the range of wine quality in the data set. Here, 6.5-7 is typically set as the minimum value for "Good" quality. It can, however, be observed that the majority of the wines 80% have scored a quality value below 7. 
+
+
+```{r}
+hist(wine$quality, breaks = c(3:9))
+```
+
+
+```{r include=FALSE}
+boxplot(wine$quality)
+```
+
+
+## Correlation 
+
+```{r include=FALSE}
+as.data.frame(cor(wine))
+```
+
+```{r}
+mar = c(9, 5, 9, 5)
+M <- cor(wine)
+corrplot(M, method = "number")
+```
+
+
+```{r}
+N <- cor(wine$quality >= 7, wine)
+corrplot(N, method = "number")
+
+O <- cor(wine$quality < 7, wine)
+corrplot(O, method = "number")
+```
+
+## Discussion: Correlation among variables
+
+The two strongest correlations with quality are moderate positive correlation to alcohol and moderate negative correlation with density.  
+Additionally, Alcohol is negatively correlated with density of wine. Density is strongly positively correlated with residual sugar quantity and moderately correlated with pH.  Free sulfur dioxide and total sulfur dioxide are strongly correlated.  
+
+
+
+```{r include=FALSE}
+# which variables are highly correlated to quality--positively OR negatively?
+heatmap(M, margins = c(9,7), main = "Wine Quality")
+```
+## Individual attribute exploration
+```{r}
+par(mfrow=c(2,6))
+boxplot(wine$fixed.acidity, main= "fixed acidity")
+boxplot(wine$volatile.acidity, main= "volatile acidity")
+boxplot(wine$citric.acid, main= "citric acid")
+boxplot(wine$residual.sugar, main= "residual sugar")
+boxplot(wine$chlorides, main= "chlorides")
+boxplot(wine$free.sulfur.dioxide, main = "free sulphur dioxide")
+boxplot(wine$total.sulfur.dioxide, main = "total sulphur dioxide")
+boxplot(wine$density, main = "density")
+boxplot(wine$pH, main = "pH")
+boxplot(wine$sulphates, main="sulphates")
+boxplot(wine$alcohol, main="% alcohol")
+boxplot(wine$quality, main= "wine quality")
+
+```
+
+## Boxplots of variable correlation with quality
+```{r echo=FALSE}
+p1 <- ggplot(wine, aes(as.factor(quality),fixed.acidity))+ geom_boxplot() + coord_cartesian(ylim = c(4,11)) + labs(title= "Fixed Acidity/ Quality")
+p2 <- ggplot(wine, aes(as.factor(quality),volatile.acidity))+ geom_boxplot()+ coord_cartesian(ylim = c(0,0.7)) + labs(title= "Volatile Acidity/ Quality")
+p3 <- ggplot(wine, aes(as.factor(quality),citric.acid))+ geom_boxplot()+ coord_cartesian(ylim = c(0,0.5)) + labs(title= "Citric Acid/ Quality")
+p4 <- ggplot(wine, aes(as.factor(quality),residual.sugar))+ geom_boxplot()+ coord_cartesian(ylim = c(0,20)) + labs(title= "Residual Sugar/ Quality")
+p5 <- ggplot(wine, aes(as.factor(quality),chlorides))+ geom_boxplot()+ coord_cartesian(ylim = c(0,0.08)) + labs(title= "Chlorides/ Quality")
+p6 <- ggplot(wine, aes(as.factor(quality),free.sulfur.dioxide))+ geom_boxplot()+ coord_cartesian(ylim = c(0,70)) + labs(title= "Free Sulphur Dioxide/ Quality")
+p7 <- ggplot(wine, aes(as.factor(quality),total.sulfur.dioxide))+ geom_boxplot()+ coord_cartesian(ylim = c(0,220)) + labs(title= "Total Sulphur Dioxide/ Quality")
+p8 <- ggplot(wine, aes(as.factor(quality),density))+ geom_boxplot()+ coord_cartesian(ylim = c(0.98,1.0)) + labs(title= "Density/ Quality")
+p9 <- ggplot(wine, aes(as.factor(quality),pH))+ geom_boxplot()+ coord_cartesian(ylim = c(2.8,3.6)) + labs(title= "pH/ Quality")
+p10 <-ggplot(wine, aes(as.factor(quality),sulphates))+ geom_boxplot()+ coord_cartesian(ylim = c(0.3,0.8))+ labs(title= "Sulphates/ Quality")
+p11 <- ggplot(wine, aes(as.factor(quality),alcohol))+ geom_boxplot()+ coord_cartesian(ylim = c(8,14))+ labs(title= "Alcohol Content/ Quality")
+
+```
+### Acidity: Fixed Acidity, Volatile Acidity, Density, Residual Sugar Plus Quality  
+
+```{r}
+grid.arrange(p1 + theme_wsj(base_size = 8, color = "gray"),p2+ theme_wsj(base_size = 8, color = "gray"), p8 + theme_wsj(base_size = 8, color  = "gray"),p4 + theme_wsj(base_size = 8, color = "gray"), nrow=1)
+```
+### Citric Acid, Chlorides, Free Sulphur Dioxide, Total Sulphur Dioxide Plus Quality
+```{r}
+grid.arrange(p3 + theme_wsj(base_size = 8, color = "gray"),p5+ theme_wsj(base_size = 8, color = "gray"), p6 + theme_wsj(base_size = 8, color  = "gray"),p7 + theme_wsj(base_size = 8, color = "gray"),  nrow=1)
+```
+
+### pH, Sulphates, Alcohol Content
+```{r}
+grid.arrange(p9 + theme_wsj(base_size = 8, color = "gray"),p10+ theme_wsj(base_size = 8, color = "gray"), p11 + theme_wsj(base_size = 8, color  = "gray"), nrow=1)
+```
+
+## Discretize Quality 
+### Bins: Good, Bad
+
+```{r}
+wineClass <- wine
+wineClass$rating <- as.factor(ifelse(wineClass$quality >= 7, "good", "bad"))
+wineClass <- dplyr::select(wineClass, -quality)
+head(wineClass) 
+
+```
+```{r}
+plot(wineClass$rating, ylim= c(0, 4000))
+```
+
+
+# Methods and Models
+All models are run three times with 10-fold cross validation. Preprocessing is done with each train function call.  Scale and center are the methods used.
+The train set contains 75% of the data; the remaining 25% is the test set.
+
+## set train and test sets
+
+```{r}
+set.seed(424)
+
+train_index <- createDataPartition(wineClass$rating, p= 0.75, list=FALSE)
+
+WC_train <- wineClass[train_index, ]
+WC_test <- wineClass[-train_index, ]
+
+table(WC_train$rating)
+table(WC_test$rating)
+```
+
+
+# Decision Tree  
+Decision trees are for classification problems and use training and test data.  It recursively splits until a stop condition is met.Stop conditions include: when all data points belong to same class, all records have same attribute values, or model control parameters for pruning have been met.
+
+```{r}
+model_DT1 <- train(rating ~. , data=WC_train, method = "rpart",
+                   preProcess =  c("center", "scale"),
+                         control = rpart.control(minsplit =200, maxdepth = 15),
+                        tuneGrid = expand.grid(cp= seq(0, .08, 0.01)),
+                   trControl = trainControl(method = "repeatedcv", number = 10, repeats=3))
+model_DT1
+```
+
+```{r}
+predict_DT1 <- predict(model_DT1, newdata = WC_test, type = "raw")
+confusionMatrix(predict_DT1, WC_test$rating, positive= "good")
+```
+
+```{r}
+plot(model_DT1)
+```
+
+
+```{r}
+plot(predict_DT1, ylim= c(0, 1200), ylab = "Density", main = "Decision Tree Density Plot")
+```
+```{r}
+fancyRpartPlot(model_DT1$finalModel)
+```
+
+
+
+```{r}
+model_DT2 <- train(rating ~. , data=WC_train, method = "rpart",
+                   preProcess =  c("center", "scale"),
+                         control = rpart.control(minsplit= 200, minbucket = 100,  maxdepth = 4),
+                        tuneGrid = expand.grid(cp= seq(0, .08, 0.01)),
+                   trControl = trainControl(method = "repeatedcv", number = 10, repeats=3))
+model_DT2
+```
+```{r}
+plot(model_DT2)
+```
+
+```{r}
+predict_DT2 <- predict(model_DT2, newdata = WC_test, type = "raw")
+confusionMatrix(predict_DT2, WC_test$rating, positive= "good")
+```
+
+```{r}
+plot(predict_DT2, ylim= c(0, 1200), ylab = "Density", main = "Decision Tree Density Plot")
+```
+```{r}
+fancyRpartPlot(model_DT2$finalModel)
+```
+
+
+
+```{r}
+model_DT3 <- train(rating ~. , data=WC_train, method = "rpart",
+                   preProcess =  c("center", "scale"),
+                         control = rpart.control( maxdepth = 9),
+                        tuneGrid = expand.grid(cp= seq(0, .1, 0.01)),
+                   trControl = trainControl(method = "repeatedcv", number = 10, repeats=3))
+model_DT3
+```
+
+```{r}
+plot(model_DT3)
+```
+
+```{r}
+predict_DT3 <- predict(model_DT3, newdata = WC_test, type = "raw")
+confusionMatrix(predict_DT3, WC_test$rating, positive= "good")
+```
+```{r}
+plot(predict_DT3, ylim= c(0, 1200), ylab = "Density", main = "Decision Tree Density Plot")
+```
+
+```{r}
+print(model_DT3$finalModel)
+```
+
+```{r}
+fancyRpartPlot(model_DT3$finalModel)
+```
+
+```{r}
+varimp_dt <- varImp(model_DT3)
+varimp_dt
+```
+
+```{r}
+plot_dt <- plot(varimp_dt, main = "Variable Importance with Decision Tree")
+```
+
+# Decision Tree Results
+
+The algorithm has several arguments and parameters that can be used to improve the model performance. After sufficient trial and error, it was determined that with a maxdepth value of 9 and a cp of 0.01, the model yielded the best results for this dataset. The model also identified 'alcohol' as the most relevant variable here, which was not surprising in light of the earlier findings gained through correlation matrix.
+Results: Upon running different DT models, different accuracies were obtained, none of which are impressive compared to other algorithms.
+Model 1: Accuracy = 79.74%
+Model 2: Accuracy = 80.39%
+Model 3: Accuracy = 81.62%
+One of the most interesting results from the Decision Tree model is that the top node–alcohol content–branches not to bad and good, but to bad and bad. This reveals the importance of alcohol content in a wine’s composition: if the alcohol content is less than 11%, 90% of wines will be bad Yet, above 11%, there’s still a 59% chance the wine will still be bad. However, above 13% alcohol, there’s a 62% chance the wine will be good.
+
+
+
+
+# Naive Bayes
+
+
+
+```{r warning=FALSE}
+model_nb1 <-caret::train(rating ~. , data=WC_train, method="nb",
+                          preProcess =  c("center", "scale"),
+                  tuneGrid = expand.grid(usekernel = c(TRUE, FALSE), fL = 1:3, adjust = 1:3),
+                  
+                    trControl = trainControl(method = "repeatedcv", number = 10, repeats=3))
+print(model_nb1)
+```
+
+```{r}
+plot(model_nb1)
+
+```
+```{r warning=FALSE}
+predict_model_nb1 <- predict(model_nb1, newdata = WC_test)
+confusionMatrix(predict_model_nb1, WC_test$rating, positive= "good")
+```
+
+```{r warning=FALSE}
+model_nb2 <-train(rating ~. , data=WC_train, method="nb",
+                          preProcess =  c("center", "scale"),
+                  tuneGrid = expand.grid(usekernel = TRUE, fL = 0:1, adjust = 1:7),  #adjust = 1:6
+                  
+                    trControl = trainControl(method = "repeatedcv", number = 10, repeats=3))
+
+```
+```{r}
+print(model_nb2)
+```
+
+```{r}
+plot(model_nb2)
+```
+```{r warning=FALSE}
+predict_model_nb2 <- predict(model_nb2, newdata = WC_test)
+confusionMatrix(predict_model_nb2, WC_test$rating, positive= "good")
+```
+
+```{r}
+plot(predict_model_nb2, ylim= c(0, 1200), ylab = "Density", main = "Naive Bayes Density Plot")
+```
+
+```{r}
+plot(model_nb2$finalModel) 
+```
+
+
+```{r}
+varimp_nb <- varImp(model_nb2)
+varimp_nb
+```
+
+```{r}
+plot(varimp_nb, main = "Variable Importance with Naive Bayes")
+```
+## Results  
+Laplace smoothing parameters of 0-4 were tested, as well as bandwidth adjustments of 0-7.  Gaussian kernel models consistently returned accuracies 5% lower than nonparametric kernels.
+
+In the final model, nonparametric kernel was used, the bandwidth adjustment was set to 5 (in order to allow a more flexible density estimate, and Laplace smoothing was set to 0 (though final results were identical with Laplace smoothing of 0 and 1). Performance accuracy improved from about 76% to 80.4% in the final.   
+
+
+# KNN
+
+```{r}
+model_knn1 <-train(rating ~. , data=WC_train, method="knn",
+                          preProcess =  c("center", "scale"),
+                  tuneGrid= data.frame(k= seq(1, 20)),
+                    trControl = trainControl(method = "repeatedcv", number = 10, repeats=3))
+print(model_knn1)
+```
+
+
+```{r}
+plot(model_knn1)
+```
+
+```{r}
+predict_model_knn1 <- predict(model_knn1, newdata = WC_test)
+confusionMatrix(predict_model_knn1, WC_test$rating, positive= "good")
+```
+
+```{r}
+plot(predict_model_knn1, ylim= c(0, 1200), ylab = "Density", main = "KNN Density Plot")
+```
+
+
+```{r}
+varimp_knn <- varImp(model_knn1)
+varimp_knn
+```
+
+```{r}
+plot(varimp_knn, main = "Variable Importance with KNN")
+```
+
+## Results
+The optimal model exhibited prediction accuracy of 85.54% using k = 1. Like Decision Trees, KNN also evaluated 'alcohol' as the most significant variable impacting the wine quality followed by 'density' and 'chlorides'.
+
+
+```{r include = FALSE}
+#Ensemble Learning
+model_bag <- caret::train(rating~. , data= WC_train, method= "treebag",
+                          preProcess = c("center", "scale"))
+model_bag
+```
+
+
+```{r include=FALSE}
+predict_bag <- predict(model_bag, newdata = WC_test)
+confusionMatrix(predict_bag, WC_test$rating, positive = "good")
+```
+```{r}
+plot(predict_bag, ylim= c(0, 1200), ylab = "Density", main = "Ensemble Method Density Plot")
+```
+## Random Forest and Gradient Boost Machine
+
+
+```{r}
+model_gbm1<-train(rating~. , data= WC_train,method="gbm",verbose=FALSE)
+model_gbm1
+```
+```{r}
+plot(model_gbm1)
+```
+```{r}
+predict_gbm1 <- predict(model_gbm1, newdata = WC_test)
+confusionMatrix(predict_gbm1, WC_test$rating, positive= "good")
+```
+
+
+```{r}
+grid<-expand.grid(.n.trees=seq(200,600,by=100),.interaction.depth=seq(2,6,by=1),.shrinkage=seq(.01,.09,by=.04),
+                   .n.minobsinnode=seq(2,11,by=3)) #grid features
+control<-trainControl(method="repeatedcv",number = 5, repeats = 2) #control
+```
+
+```{r include=FALSE, warning=FALSE}
+
+model_gbm_train  <-train(rating~. , data= WC_train,method='gbm',
+                         preProcess = c("center", "scale"),
+                         trControl=control,tuneGrid=grid)
+
+```
+```{r}
+print(model_gbm_train)
+```
+
+```{r}
+plot(model_gbm_train)
+```
+```{r}
+predict_gbm <- predict(model_gbm_train, newdata = WC_test)
+confusionMatrix(predict_gbm, WC_test$rating, positive= "good")
+```
+
+```{r}
+grid<-expand.grid(.n.trees=500,.interaction.depth=seq(5,9,by=1),.shrinkage=seq(.13,.21,by=.04),
+                   .n.minobsinnode=seq(3,9,by=3)) #grid featuresseq(500,700,by=100)
+control<-trainControl(method="repeatedcv",number = 10, repeats = 3) #control
+```
+
+```{r include=FALSE}
+
+model_gbm3  <-train(rating~. , data= WC_train,method='gbm',
+                         preProcess = c("center", "scale"),
+                         trControl=control,tuneGrid=grid)
+
+```
+```{r}
+print(model_gbm3)
+```
+
+```{r}
+plot(model_gbm3)
+```
+
+```{r}
+predict_gbm3 <- predict(model_gbm3, newdata = WC_test)
+confusionMatrix(predict_gbm3, WC_test$rating, positive= "good")
+```
+```{r}
+varimp_gbm <- varImp(model_gbm3)
+varimp_gbm
+```
+
+```{r}
+plot(varimp_gbm, main = "Variable Importance with Gradient Boosting")
+```
+
+## Results  
+Prediction performance improved from the untrained gbm model (Accuracy : 0.8333) with the following tuning parameters: 
+.n.trees=500,.interaction.depth=seq(5,9,by=1),.shrinkage=seq(.13,.21,by=.04), .n.minobsinnode=seq(3,9,by=3)).  Final prediction accuracy came in at an impressive 88.64%
+
+Models were run with few trees (iterations) and with many trees (first, 50-150, then 400-700).  After multiple experiments tuning with sequences, n.trees (number of iterations) was set to 500, as performance was negligibly improved with n.trees above 500.  The remaining parameters were narrowed to the best range of options, and best model parameters fluctuated within these ranges, yielding different "winning" parameters each time the model was run.
+
+Interaction.depth (highest level of variable interactions) was tested from 1-12.  The most accurate model used 9.  Shrinkage (learning rate) was tested with parameters from 0.01 to 0.25.  Sucessful models performed best between .13 and .17, with the final model using a learning rate of 0.13.  Minimum observations per tree (n.minobsinnode) was tested from 2 to 12.  The final model utilized n.minobsinnode = 6
+
+
+
+```{r}
+model_rf <- caret::train(rating~. , data= WC_train, method= "rf",
+                         preProcess = c("center", "scale"),
+                         tuneGrid = expand.grid(mtry = seq(1, 13, 2)),
+                         trControl = trainControl(method = "repeatedcv", number = 10, repeats=3))
+model_rf
+```
+```{r}
+summary(model_rf$resample$Accuracy)
+```
+
+```{r}
+plot(model_rf$results$mtry, model_rf$results$Accuracy, main = "RF: Accuracy by mtry", pch = 9 )
+```
+```{r}
+plot(model_rf$finalModel)
+```
+
+
+## Attribute Importance
+
+```{r}
+varimp_rf <- varImp(model_rf)
+varimp_rf
+```
+
+```{r}
+plot(varimp_rf, main = "Variable Importance with Random Forest")
+```
+
+```{r}
+predict_rf <- predict(model_rf, newdata = WC_test)
+confusionMatrix(predict_rf, WC_test$rating)
+
+```
+```{r}
+plot(predict_rf, ylim= c(0, 1200), ylab = "Density", main = "Random Forest Density Plot")
+```
+
+For Random Forest Method, the resampling and preprocessing techniques remain the same : 10-fold Cross-Validation repeated 3 times with “center” and “scale.” The final value used for the model was mtry = 2. Very little tuning is required.
+Results: This model performed better than previous models for this dataset resulting in a very high accuracy of 88.73%. The kappa value was also observed to be significantly higher at a statistic of 0.629.
+
+
+# SVM Linear
+```{r warning=FALSE}
+model_linear <- caret::train(rating ~. , WC_train,
+                               preProcess =  c("center", "scale"),
+                                 method= "svmLinear",
+                                 tuneGrid = expand.grid(C = seq(0, 12, 2)),
+                              trControl = trainControl(method = "repeatedcv", number = 10, repeats=3))
+model_linear
+```
+
+```{r}
+predict_svm_linear <- predict(model_linear, WC_test)
+confusionMatrix(predict_svm_linear, WC_test$rating, positive = "good")
+```
+```{r}
+plot(predict_svm_linear, ylim= c(0, 1200), ylab = "Density", main = "Linear Density Plot")
+```
+
+
+```{r warning=FALSE}
+model_svm_rbf2 <- caret::train(rating ~. , WC_train,
+                               preProcess =  c("center", "scale"),
+                                 method= "svmRadial",
+                                 tuneGrid = expand.grid(sigma = seq(0.8, 1, 0.1),
+                                                    C = seq(2, 30, 2)),
+                              trControl = trainControl(method = "repeatedcv", number = 10, repeats=3))
+model_svm_rbf2
+```
+
+```{r}
+plot(model_svm_rbf2)
+```
+
+```{r}
+predict_svm_rbf2 <- predict(model_svm_rbf2, WC_test)
+confusionMatrix(predict_svm_rbf2, WC_test$rating, positive = "good")
+```
+```{r}
+svm_table <-confusionMatrix(predict_svm_rbf2, WC_test$rating, positive = "good")
+(svm_table$table)
+```
+
+
+
+```{r}
+plot(predict_svm_rbf2, ylim= c(0, 1200), ylab = "Density", main = "SVM--RBF Density Plot")
+```
+
+```{r}
+varimp_svm2 <- (varImp(model_svm_rbf2))
+(varimp_svm2)
+```
+```{r}
+plot(varimp_svm2, main="SVM--RBF")
+```
+
+## Results  
+Models were run with sequences of sigma values between 0 and 1, sequencing at intervals of 0.1.  Later, cost was sequenced from 0.8-1, with intervals of 0.1. Costs of 0 – 40 were explored.  Early on, costs in the mid-20’s appeared.  
+Results: In the final model, sigma is 0.9 and cost is 2; this returned a prediction accuracy of 87.34% and a kappa value of 0.584.
+
+# SVM Polynomial
+
+```{r}
+model_svm_poly <- caret::train(rating ~. , WC_train,
+                               preProcess = c("scale", "center"),
+                                 method = 'svmPoly',
+                                 tuneGrid = expand.grid(scale = seq(0.02, .1, 0.01),
+                                                   C = seq(1, 5, 1),
+                               degree = seq(2, 3, 1)),
+                               trControl = trainControl(method = "repeatedcv", number = 10, repeats=3))
+model_svm_poly
+```
+
+
+```{r}
+plot(model_svm_poly)
+```
+```{r}
+predict_svm_poly <- predict(model_svm_poly, WC_test)
+confusionMatrix(predict_svm_poly, WC_test$rating, positive = "good")
+```
+```{r}
+plot(predict_svm_poly, ylim= c(0, 1200), ylab = "Density", main = "Polynomial Density Plot")
+```
+
+## Results
+For SVM Polynomial Kernel, parameters include scale (set initially to 0.001, 0.01, 0.1, then honed to 0.02 - 0.1).  Costs of 0-10 were explored, as well as setting the degree to 1 – 5.  
+Results: Results from this model were unstable and varied significantly with each trial.  The final values used for the model were degree = 3, scale = 0.05, and C = 3, resulting in an accuracy value of 81.86% and a kappa value of 0.334.
+
+
+# Model Comparision
+```{r}
+model_comparison <-resamples(list(DT1 = model_DT1,  DT2 = model_DT2, DT3 = model_DT3, NB= model_nb2 ,KNN = model_knn1, 
+                                  RF = model_rf, GBM= model_gbm3,  SVM.Lin = model_linear, 
+                                  SVM.RBF = model_svm_rbf2, SVM.Poly = model_svm_poly ))
+summary(model_comparison)
+```
+```{r}
+glimpse(model_comparison)
+```
+
+
+
+```{r}
+scales <- list(x= list(relation = "free"),
+               y = list(relation = "free"))
+bwplot(model_comparison, scales = scales)
+```
+
+
+```{r}
+plot(varimp_dt, main = "Variable Importance with Decision Tree")
+plot(varimp_nb, main = "Var. Imp. Naive Bayes")
+plot(varimp_knn, main = "Variable Importance with KNN")
+plot(varimp_rf, main = "Variable Importance with Random Forest")
+plot(varimp_gbm, main = "Var. Imp. Gradient Boost")
+plot(varimp_svm2, main= "Variable Importance with SVM--RFB")
+
+```
+```{r}
+plot_dt <- plot(varimp_dt, main = "Var. Imp. Decision Tree")
+plot_nb <- plot(varimp_nb, main = "Var. Imp. Naive Bayes")
+plot_knn <-plot(varimp_knn, main = "Var. Imp. KNN")
+plot_rf <- plot(varimp_rf, main = "Var. Imp. Random Forest")
+plot_gbm <- plot(varimp_gbm, main = "Var. Imp. Gradient Boost")
+plot_svm <- plot(varimp_svm2, main= "Var. Imp. SVM RBF")
+
+```
+
+
+
+```{r}
+#mar = c(10,9,4,2)
+#oma = c(1,2,1,2)
+#par(mfcol=c(4,1))
+```
+
+```{r}
+grid.arrange(plot_dt, plot_nb,   nrow=1)
+```
+
+```{r}
+grid.arrange(plot_knn, plot_rf, nrow=1)
+```
+
+
+```{r}
+grid.arrange(plot_gbm, plot_svm,   nrow=1)
+```
+
+
+
+
+
+
+
+
